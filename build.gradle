@@ -1,0 +1,18 @@
+plugins {
+    id 'java'
+}
+
+version '1.0-SNAPSHOT'
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation files('libs/bcpg-jdk15on-165.jar')
+    implementation files('libs/bcprov-ext-jdk15on-165.jar')
+    implementation files('libs/bcprov-jdk15on-165.jar')
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+}
