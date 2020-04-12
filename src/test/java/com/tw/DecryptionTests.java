@@ -35,7 +35,7 @@ public class DecryptionTests {
         publicKey  = KeysUtils.extractPublicKey(publicKeyInputStream);
         secretKey = KeysUtils.extractSecretKey(privateKeyInputStream);
 
-        InputStream encryptedFile =  new FileInputStream(this.getClass().getClassLoader().getResource("john/encrypted.txt").getFile());
+        InputStream encryptedFile =  new FileInputStream(this.getClass().getClassLoader().getResource("john/encrypted-armor.txt").getFile());
         String passPhrase = "test@1234";
         String decryptedData = Decrypter.decrypt(encryptedFile,secretKey,publicKey, passPhrase);
         Assert.assertEquals("hello world\n", decryptedData);
@@ -55,9 +55,23 @@ public class DecryptionTests {
         publicKey  = KeysUtils.extractPublicKey(publicKeyInputStream);
         secretKey = KeysUtils.extractSecretKey(privateKeyInputStream);
 
+        InputStream encryptedFile =  new FileInputStream(this.getClass().getClassLoader().getResource("john/encrypted-armor.txt").getFile());
+        String passPhrase = "test@1234";
+        String decryptedData = Decrypter.decrypt(encryptedFile,secretKey,publicKey, passPhrase);
+    }
+
+    @Test
+    public void decryptNonArmoredSignedEncryptedFileUsingCorrectKeys() throws IOException, PGPException {
+        publicKeyInputStream = new FileInputStream(this.getClass().getClassLoader().getResource("john/public-key.txt").getFile());
+        privateKeyInputStream = new FileInputStream(this.getClass().getClassLoader().getResource("john/private-key.txt").getFile());
+
+        publicKey  = KeysUtils.extractPublicKey(publicKeyInputStream);
+        secretKey = KeysUtils.extractSecretKey(privateKeyInputStream);
+
         InputStream encryptedFile =  new FileInputStream(this.getClass().getClassLoader().getResource("john/encrypted.txt").getFile());
         String passPhrase = "test@1234";
         String decryptedData = Decrypter.decrypt(encryptedFile,secretKey,publicKey, passPhrase);
+        Assert.assertEquals("hello world\n", decryptedData);
     }
 
 }
