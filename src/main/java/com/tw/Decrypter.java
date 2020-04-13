@@ -1,140 +1,161 @@
 package com.tw;
 
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.openpgp.*;
-import org.bouncycastle.openpgp.operator.PBESecretKeyDecryptor;
-import org.bouncycastle.openpgp.operator.PGPDigestCalculatorProvider;
 import org.bouncycastle.openpgp.operator.bc.BcKeyFingerprintCalculator;
-import org.bouncycastle.openpgp.operator.bc.BcPGPContentVerifierBuilderProvider;
 import org.bouncycastle.openpgp.operator.bc.BcPublicKeyDataDecryptorFactory;
-import org.bouncycastle.openpgp.operator.jcajce.JcaPGPContentVerifierBuilderProvider;
-import org.bouncycastle.openpgp.operator.jcajce.JcaPGPDigestCalculatorProviderBuilder;
-import org.bouncycastle.openpgp.operator.jcajce.JcePBESecretKeyDecryptorBuilder;
+import org.bouncycastle.util.io.Streams;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.logging.Logger;
 
 public class Decrypter {
+    public Logger logger = Logger.getLogger(Logger.GLOBAL_LOGGER_NAME);
+    public BcKeyFingerprintCalculator fingerPrintCalculator = new BcKeyFingerprintCalculator();
+    private SecretKeyConfig secretKeyConfig;
+    private InputStream encryptedInputStream;
+    private Validator validator;
+    private boolean signVerification = false;
+    private String decryptedData;
+
+    public Decrypter givenDecryptionKeys(SecretKeyConfig secretKeyConfig) {
+        this.secretKeyConfig = secretKeyConfig;
+        return this;
+    }
+
     /**
      * Decrypts a given input stream (file) which is signed and encrypted by pgp CLI as below: <br>
      * <code>gpg --encrypt --sign --armor --output encrypted-signed-output.txt -r <receiver-mail-id> inputfile.txt</code>
      *
      * @param inputStream InputStream for the file for which decryption needs to be performed
-     * @param secretKey PGPSecretKey - The private key by which decryption needs to be done
-     * @param publicKey PGPPublicKey - The public key by which signing needs to be verified
-     * @param password String - The passphrase by which Private key is protected
      * @throws IOException
      * @throws PGPException
      */
-    public static String decrypt(InputStream inputStream, PGPSecretKey secretKey, PGPPublicKey publicKey, String password) throws IOException, PGPException {
-        PGPOnePassSignature onePassSignature = null;
-        PGPPublicKeyEncryptedData encryptedData = null;
-        char[] passPhrase = password.toCharArray();
-
+    private String decryptGivenStream(InputStream inputStream) throws IOException, PGPException {
+        InputStream plainText = null;
+        List<PGPOnePassSignature> verifiedOnePassSignatures = null;
         inputStream = PGPUtil.getDecoderStream(inputStream);
-        PGPObjectFactory objectFactory = new PGPObjectFactory(inputStream, new BcKeyFingerprintCalculator());
+        PGPObjectFactory objectFactory = new PGPObjectFactory(inputStream, fingerPrintCalculator);
         Object object = objectFactory.nextObject();
-        if (object instanceof PGPEncryptedDataList) {
-            System.out.println("Found PGPEncryptedDataList Packet");
+
+        if(object instanceof PGPEncryptedDataList) {
+            logger.info("Found Encrypted Data List");
             PGPEncryptedDataList encryptedDataList = (PGPEncryptedDataList) object;
-            final Iterator<?> encryptedDataObjects = encryptedDataList.getEncryptedDataObjects();
-            if (!encryptedDataObjects.hasNext()) {
+
+            if (encryptedDataList.isEmpty()) {
                 throw new PGPException("Decryption failed - No encrypted data found!");
-            }
-            PGPPrivateKey privateKey = null;
-            encryptedData = null;
-            while (privateKey == null && encryptedDataObjects.hasNext()) {
-                encryptedData = (PGPPublicKeyEncryptedData) encryptedDataObjects.next();
-                privateKey = extractPrivateKey(secretKey, passPhrase);
+            }else {
+                plainText = getPlainTextFromEncryptedDataList(encryptedDataList, secretKeyConfig.getSecretKeys());
             }
 
-            if (privateKey == null) {
-                throw new PGPException(
-                        "Decryption failed - No secret key was found in the key ring matching the public key"
-                                + " used to encrypt the file, aborting");
-            }
-
-            InputStream plainText = encryptedData
-                    .getDataStream(new BcPublicKeyDataDecryptorFactory(
-                            privateKey));
             objectFactory = new PGPObjectFactory(plainText, new BcKeyFingerprintCalculator());
             object = objectFactory.nextObject();
-        } else {
-            throw new PGPException(
-                    "Decryption failed - Not able to find encrypted Data list");
+        }else {
+            throw new PGPException("Not able to find encrypted data list");
         }
 
         if (object instanceof PGPCompressedData) {
-            System.out.println("Found PGPCompressed Packet");
-            objectFactory = new PGPObjectFactory(
-                    ((PGPCompressedData) object).getDataStream(), new BcKeyFingerprintCalculator());
+            logger.info("Found PGP Compressed Data");
+            byte[] compressedBytes = ((PGPCompressedData) object).getDataStream().readAllBytes();
+            objectFactory = new PGPObjectFactory(compressedBytes, fingerPrintCalculator);
             object = objectFactory.nextObject();
         } else {
-            throw new PGPException(
-                    "Decryption failed - Not able to find Compressed Data packet");
+            throw new PGPException("Not able to find Compressed Data packet");
         }
 
         if (object instanceof PGPOnePassSignatureList) {
-            System.out.println("Found PGPOnePassSignatureList packet");
+            logger.info("Found PGP OnePass Signature List");
             PGPOnePassSignatureList onePassSignatures = (PGPOnePassSignatureList) object;
-            System.out.println("No of one pass signatures available:" + onePassSignatures.size());
-            if (onePassSignatures.size() == 1) {
-                onePassSignature = onePassSignatures.get(0);
-                onePassSignature.init(new BcPGPContentVerifierBuilderProvider(), publicKey);
-                System.out.println("One Pass Signature :" + Long.toHexString(onePassSignature.getKeyID()));
-                System.out.println("Public Key Id :" + Long.toHexString(publicKey.getKeyID()));
+            verifiedOnePassSignatures = new ArrayList<>();
 
-                if (onePassSignature.getKeyID() == publicKey.getKeyID()) {
-                    System.out.println("Signature Key ID verified");
-                } else {
-                    System.out.println("Signature could not verify");
-                }
-                object = (PGPLiteralData) objectFactory.nextObject();
-            } else {
-                throw new PGPException(
-                        "Decryption failed - Multiple OnePass Signatures Found");
+            if(signVerification) {
+                verifiedOnePassSignatures = validator.verifyOnePassSignatureKeyId(onePassSignatures);
             }
-        } else {
-            throw new PGPException(
-                    "Decryption failed - Not able to find OnePassSignature PacketList");
+
+            if(verifiedOnePassSignatures.isEmpty() && signVerification) {
+                throw new PGPException("Not able to verify any of the one pass signatures");
+            }else {
+                object = (PGPLiteralData)objectFactory.nextObject();
+            }
+        }else {
+            throw new PGPException("Not able to find OnePass Signature List");
         }
 
         if (object instanceof PGPLiteralData) {
-            System.out.println("Found PGPLiteral Data Packet");
-            PGPLiteralData literalData = (PGPLiteralData) object;
-            if (encryptedData.isIntegrityProtected()) {
-                if (!encryptedData.verify()) {
-                    throw new PGPException("Failed at Integrity check");
-                }
-            }
-            InputStream literalDataInputStream = literalData.getInputStream();
-            byte[] bytes = literalDataInputStream.readAllBytes();
-            onePassSignature.update(bytes);
-            PGPSignatureList signatureList = (PGPSignatureList) objectFactory.nextObject();
+            logger.info("Found PGP Literal Data");
+            InputStream literalDataInputStream = ((PGPLiteralData) object).getInputStream();
+            byte[] bytes = pipe(literalDataInputStream);
 
-            if (onePassSignature.verify(signatureList.get(0))) {
-                String decryptedData = new String(bytes, StandardCharsets.UTF_8);
-                System.out.println("Signature verified");
-                System.out.println("The decrypted data: " + decryptedData);
+            if(signVerification) {
+                PGPSignatureList signatureList = (PGPSignatureList) objectFactory.nextObject();
+
+                List<PGPSignature> verifiedSigns = validator.verifySignaturePackets(bytes, verifiedOnePassSignatures, signatureList);
+
+                if (verifiedSigns.isEmpty()) {
+                    throw new PGPException("Not able to verify any of the signature packets");
+                } else if (verifiedOnePassSignatures.size() == verifiedSigns.size()) {
+                    decryptedData =  new String(bytes);
+                    return decryptedData;
+                }
+            }else {
+                decryptedData =  new String(bytes);
                 return decryptedData;
-            } else {
-                throw new PGPException("Signature verification failed!");
             }
         }
 
         throw new PGPException("Not able to decrypt the file");
     }
 
-    static PGPPrivateKey extractPrivateKey(PGPSecretKey pgpSecKey, char[] passPhrase)
-            throws PGPException {
-        PGPDigestCalculatorProvider calcProvider = new JcaPGPDigestCalculatorProviderBuilder()
-                .setProvider(new BouncyCastleProvider()).build();
+    private InputStream getPlainTextFromEncryptedDataList(PGPEncryptedDataList dataList, Map<PGPSecretKey, String> keymap) throws PGPException {
+        final Iterator<?> encryptedDataObjects = dataList.getEncryptedDataObjects();
+        while (encryptedDataObjects.hasNext()) {
+            PGPPublicKeyEncryptedData encryptedData = (PGPPublicKeyEncryptedData) encryptedDataObjects.next();
 
-        PBESecretKeyDecryptor decrypter = new JcePBESecretKeyDecryptorBuilder(
-                calcProvider).setProvider(new BouncyCastleProvider())
-                .build(passPhrase);
-        return pgpSecKey.extractPrivateKey(decrypter);
+            for(PGPSecretKey secretKey: keymap.keySet()) {
+                PGPPrivateKey privateKey = KeysUtils.extractPrivateKey(secretKey, keymap.get(secretKey).toCharArray());
+                try {
+                    InputStream plainText = encryptedData.getDataStream(new BcPublicKeyDataDecryptorFactory(
+                            privateKey));
+                    logger.info("Found Plain Text from Encrypted Data List");
+                    return plainText;
+                }catch (PGPException e) {
+                }
+            }
+        }
+        throw new PGPException("Not able to decrypt the packets with provided private keys");
+    }
+
+    public Decrypter ignoreSignVerification() {
+        this.signVerification = false;
+        return this;
+    }
+
+    public String andGetDecryptedDataAsString() throws IOException, PGPException {
+        String decryptedData =  decryptGivenStream(encryptedInputStream);
+        return decryptedData;
+    }
+
+    public Decrypter verifySignatureBy(PGPPublicKey...publicKeys) {
+        this.signVerification = true;
+        PublicKeyConfig publicKeyConfig = new PublicKeyConfig(publicKeys);
+        validator = new Validator(publicKeyConfig);
+        return this;
+    }
+
+    public Decrypter decrypt(InputStream inputStream) {
+        this.encryptedInputStream = inputStream;
+        return this;
+    }
+
+    private byte[] pipe(InputStream is) throws IOException {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        Streams.pipeAll(is, bos);
+        bos.close();
+        return bos.toByteArray();
     }
 }
