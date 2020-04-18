@@ -121,7 +121,7 @@ public class DecryptionTests {
                 .ignoreSignVerification()
                 .andGetDecryptedDataAsString();
 
-        Assert.assertEquals("hello worldx\n", decryptedData);
+        Assert.assertEquals("hello world\n", decryptedData);
     }
 
     @Test
