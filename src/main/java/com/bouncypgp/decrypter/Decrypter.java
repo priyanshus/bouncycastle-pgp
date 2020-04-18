@@ -117,7 +117,7 @@ public class Decrypter {
             PGPPublicKeyEncryptedData encryptedData = (PGPPublicKeyEncryptedData) encryptedDataObjects.next();
 
             for(PGPSecretKey secretKey: keymap.keySet()) {
-                PGPPrivateKey privateKey = KeysUtils.extractPrivateKey(secretKey, keymap.get(secretKey).toCharArray());
+                PGPPrivateKey privateKey = KeyUtils.extractPrivateKey(secretKey, keymap.get(secretKey).toCharArray());
                 try {
                     InputStream plainText = encryptedData.getDataStream(new BcPublicKeyDataDecryptorFactory(
                             privateKey));

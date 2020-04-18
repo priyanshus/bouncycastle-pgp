@@ -15,7 +15,7 @@ import java.io.InputStream;
 import java.util.Iterator;
 import java.util.logging.Logger;
 
-public class KeysUtils {
+public class KeyUtils {
     public static Logger logger = Logger.getLogger(Logger.GLOBAL_LOGGER_NAME);
 
     public static PGPSecretKey extractSecretKey(InputStream input)
