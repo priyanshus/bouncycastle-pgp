@@ -1,4 +1,4 @@
-package com.tw;
+package com.bouncypgp.decrypter;
 
 import org.bouncycastle.openpgp.PGPPublicKey;
 import org.bouncycastle.openpgp.PGPSecretKey;

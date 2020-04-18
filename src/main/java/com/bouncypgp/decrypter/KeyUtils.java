@@ -1,4 +1,4 @@
-package com.tw;
+package com.bouncypgp.decrypter;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.openpgp.*;

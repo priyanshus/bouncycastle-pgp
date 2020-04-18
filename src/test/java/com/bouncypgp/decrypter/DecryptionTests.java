@@ -1,4 +1,4 @@
-package com.tw;
+package com.bouncypgp.decrypter;
 
 import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPPublicKey;
@@ -19,7 +19,7 @@ public class DecryptionTests {
     private static PGPSecretKey aliceSecKey;
     private static String passPhrase = "test@1234";
     private static Decrypter decrypter;
-    private static InputStream multipleSignAndMultipleReceiverEncryptedFile ;
+    private static InputStream multipleSignAndMultipleReceiverEncryptedFile;
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 

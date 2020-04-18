@@ -1,4 +1,4 @@
-package com.tw;
+package com.bouncypgp.decrypter;
 
 import org.bouncycastle.openpgp.*;
 import org.bouncycastle.openpgp.operator.bc.BcPGPContentVerifierBuilderProvider;
